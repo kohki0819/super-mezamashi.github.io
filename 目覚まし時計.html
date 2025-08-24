@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ブラウザ目覚まし時計（結果表示機能付き）</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0b1020">
+  <style>
+    :root{ --bg:#0b1020;--panel:#121a2f;--accent:#6ee7ff;--accent2:#ffd166;--text:#e6f0ff;--muted:#9bb0d1; }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans JP",sans-serif;background:linear-gradient(160deg,#0b1020,#111836 60%,#182447);color:var(--text);min-height:100svh}
+    .wrap{max-width:980px;margin:0 auto;padding:24px}
+    header{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
+    h1{font-size:clamp(20px,2.8vw,28px);margin:0;font-weight:800;letter-spacing:0.02em}
+    .clock{font-variant-numeric:tabular-nums;font-size:clamp(36px,8vw,80px);text-align:center;margin:12px 0 18px;font-weight:800}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+    .card{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);backdrop-filter: blur(6px);border-radius:18px;padding:16px;box-shadow:0 10px 20px rgba(0,0,0,.25)}
+    .card h2{margin:0 0 10px;font-size:18px;color:var(--accent)}
+    label{display:block;font-size:13px;color:var(--muted);margin:8px 0 4px}
+    input,select,button,textarea{width:100%;padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#0f1730;color:var(--text);font-size:14px}
+    textarea{height:88px}
+    input[type="time"]{color:var(--text);-webkit-text-fill-color:var(--text)}
+    input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(1) contrast(200%);}
+    input[type="checkbox"]{width:auto}
+    .row{display:flex;gap:10px;align-items:center}
+    .row > *{flex:1}
+    .hint{font-size:12px;color:var(--muted);margin-top:6px}
+    .pill{display:inline-flex;align-items:center;gap:8px;background:rgba(110,231,255,.12);border:1px solid rgba(110,231,255,.3);padding:6px 10px;border-radius:999px;font-size:12px}
+    .footer{display:flex;justify-content:space-between;align-items:center;margin-top:14px}
+    .btn{cursor:pointer;user-select:none}
+    .btn-primary{background:linear-gradient(180deg,#34d399,#0ea5e9);border:none;font-weight:700}
+    .btn-danger{background:#ef4444;border:none}
+    .btn-ghost{background:transparent;border:1px dashed rgba(255,255,255,.2)}
+    .next-alarm{font-size:14px;color:var(--accent2);font-weight:700}
+    .badge{font-size:11px;background:rgba(255,255,255,.08);padding:2px 8px;border-radius:999px;margin-left:8px;color:var(--muted)}
+    dialog{border:none;border-radius:16px;max-width:680px;width:96%;background:#0f1730;color:var(--text);padding:18px}
+    dialog::backdrop{background:rgba(0,0,0,.6)}
+    .challenge{display:flex;flex-direction:column;gap:12px}
+    .tiny{font-size:12px;color:var(--muted)}
+    .flex{display:flex;gap:8px;align-items:center}
+    .grow{flex:1}
+    .switch{display:flex;align-items:center;gap:8px}
+    /* 四字熟語並べ替えスタイル */
+    .yoji-container{display:flex;gap:8px;justify-content:center;margin-top:12px}
+    .tile{min-width:56px;height:56px;border-radius:8px;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;user-select:none;cursor:grab}
+    .tile.dragging{opacity:0.5;border:2px dashed rgba(255,255,255,.2)}
+    .tile.selected{outline:2px solid var(--accent2)}
+    .tiles-row{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+    .hint-small{font-size:12px;color:var(--muted);text-align:center;margin-top:8px}
+    .list-row{display:flex;justify-content:space-between;gap:8px;padding:8px;border-radius:8px;background:rgba(255,255,255,.03);margin-top:8px}
+    .alarms-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+    .alarm-row{display:flex;gap:8px;align-items:center;padding:8px;border-radius:10px;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,.03)}
+    .alarm-time{font-weight:800;font-size:18px}
+    .muted{color:var(--muted)}
+    .weekdays{display:flex;gap:6px;margin-top:6px}
+    .wd-btn{padding:6px;border-radius:8px;border:1px solid rgba(255,255,255,.06);min-width:32px;text-align:center}
+    .wd-btn.selected{background:var(--accent);color:#000;border-color:var(--accent)}
+    .scoreboard{display:flex;flex-direction:column;align-items:flex-end;gap:4px;font-size:12px;color:var(--muted)}
+    .scoreboard div{background:rgba(255,255,255,.03);padding:6px 8px;border-radius:8px}
+    .overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);z-index:60}
+    .countdown{font-size:64px;font-weight:900;color:var(--accent)}
+    .attack-panel{background:#0f1730;padding:18px;border-radius:12px;border:1px solid rgba(255,255,255,.06);min-width:320px}
+    @media (max-width:520px){ .row{flex-direction:column} .row> *{width:100%} .scoreboard{align-items:flex-start} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="badge" id="permissionsBadge">権限: 未確認</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="pill" id="wakeLockStatus">⚡ 画面スリープ抑止: 未取得</span>
+      </div>
+    </header>
+
+    <div class="clock" id="clock">--:--:--</div>
+
+    <div class="grid">
+      <section class="card">
+        <h2>アラーム一覧</h2>
+        <!-- アラーム追加入力フォーム -->
+        <div class="alarm-add-form">
+          <div style="display:flex;gap:8px;align-items:center;width:100%">
+            <!-- `step="60"`は、入力フィールドの秒数を隠し、分単位に設定します。-->
+            <input id="appointment" name="appointment" type="time" step="60" required style="width:160px" />
+            <input id="newLabel" placeholder="ラベル（任意）" style="width:160px" />
+            <select id="newChallenge" style="width:160px">
+              <option value="sound">サウンドのみ</option>
+              <option value="math">計算問題で停止</option>
+              <option value="math-30">計算タイムアタック(30s)</option>
+              <option value="yoji">四字熟語で停止</option>
+              <option value="yoji-30">四字熟語タイムアタック(30s)</option>
+              <option value="none">なし（手動で停止）</option>
+            </select>
+          </div>
+          <div style="margin-top: 10px;">
+            <button id="addAlarmBtn" class="btn btn-primary">追加</button>
+          </div>
+        </div>
+        <div class="hint">ネイティブの時刻入力を使用します。曜日指定は編集時に選択可能（デフォルトは毎日）。</div>
+        <div id="alarmsList" class="alarms-list"></div>
+        <div class="footer">
+          <div></div>
+          <div>
+            <span class="next-alarm" id="nextAlarm">次のアラーム: 未設定</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>動作・安全</h2>
+        <div class="row">
+          <button id="reqPerm" class="btn">通知許可をリクエスト</button>
+          <button id="toggleWakeLock" class="btn">画面スリープ抑止</button>
+        </div>
+        <div class="hint">・通知を許可すると、他のタブでも鳴ったことに気づきやすくなります。<br>・Wake Lockはブラウザ依存です（iOS/Safariは制限あり）。</div>
+        <div style="margin-top:10px">
+          <label for="volume">音量</label>
+          <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8" />
+          <label for="fadeInSel">フェードイン</label>
+          <select id="fadeInSel">
+            <option value="0">なし</option>
+            <option value="3">3秒</option>
+            <option value="5" selected>5秒</option>
+            <option value="10">10秒</option>
+            <option value="20">20秒</option>
+            <option value="30">30秒</option>
+          </select>
+          <label for="soundType">サウンド</label>
+          <select id="soundType">
+            <option value="beep" selected>電子音(ビープ)</option>
+            <option value="pulse">脈打つ低音</option>
+            <option value="sweep">スイープ音</option>
+          </select>
+          <div class="hint">※iOS Safariなどはユーザー操作なしでは音が鳴らないことがあります。まずは「テスト再生」を押してください。</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="testSound" class="btn btn-ghost">テスト再生</button>
+          </div>
+          <div style="margin-top:12px">
+            <button id="editYoji" class="btn">四字熟語問題を編集</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Overlays / dialogs for time-attack -->
+    <div id="overlay" style="display:none" class="overlay">
+      <div id="overlayContent" class="attack-panel">
+        <div id="overlayCountdown" class="countdown">3</div>
+        <div id="attackArea" style="display:none">
+          <div id="attackInfo" style="margin-bottom:8px"></div>
+          <div id="attackQuestion" style="margin-bottom:8px"></div>
+          <input id="attackInput" placeholder="答え" />
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="attackSubmit" class="btn btn-primary">送信</button>
+            <button id="attackGiveUp" class="btn">中断</button>
+            <div style="flex:1;text-align:right;color:var(--muted)" id="attackTimer">残り: 30s</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for alarm edit -->
+  <dialog id="alarmEditDialog">
+    <h2>アラーム編集</h2>
+    <div class="challenge">
+      <div class="row">
+        <div class="grow">
+          <label for="editTime">時刻</label>
+          <!-- `step="60"`を追加して秒数表示を非表示にする -->
+          <input type="time" id="editTime" step="60" required />
+        </div>
+        <div class="grow">
+          <label for="editLabel">ラベル</label>
+          <input id="editLabel" placeholder="例: 薬を飲む" />
+        </div>
+      </div>
+      <label>チャレンジ</label>
+      <select id="editChallenge">
+        <option value="sound">サウンドのみ</option>
+        <option value="math">計算問題で停止</option>
+        <option value="math-30">計算タイムアタック(30s)</option>
+        <option value="yoji">四字熟語で停止</option>
+        <option value="yoji-30">四字熟語タイムアタック(30s)</option>
+        <option value="none">なし（手動で停止）</option>
+      </select>
+      <div style="margin-top:10px">
+        <label>鳴らす曜日</label>
+        <div class="weekdays" id="editWeekdays">
+          <div class="wd-btn btn" data-day="0">日</div>
+          <div class="wd-btn btn" data-day="1">月</div>
+          <div class="wd-btn btn" data-day="2">火</div>
+          <div class="wd-btn btn" data-day="3">水</div>
+          <div class="wd-btn btn" data-day="4">木</div>
+          <div class="wd-btn btn" data-day="5">金</div>
+          <div class="wd-btn btn" data-day="6">土</div>
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:20px">
+      <button id="cancelAlarmEdit" class="btn btn-ghost">キャンセル</button>
+      <button id="saveAlarmEdit" class="btn btn-primary">保存</button>
+    </div>
+  </dialog>
+
+  <!-- Modal for Math challenge -->
+  <dialog id="challengeDialog">
+    <h2>計算問題</h2>
+    <div class="challenge">
+      <div id="challengeText" style="font-size:32px;font-weight:700;text-align:center"></div>
+      <input id="challengeInput" placeholder="答えを入力" />
+      <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:12px">
+        <button id="challengeCancel" class="btn btn-ghost">中断</button>
+        <button id="challengeOk" class="btn btn-primary">送信</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal for Yoji challenge -->
+  <dialog id="yojiDialog">
+    <h2>四字熟語並べ替え</h2>
+    <div class="challenge">
+      <div class="yoji-container" id="yojiTiles"></div>
+      <div class="hint-small">ドラッグ&ドロップまたはタップで並び替え</div>
+      <div id="yojiHint" class="hint-small" style="display:none"></div>
+      <div style="display:flex;justify-content:flex-end;gap:12px;margin-top:16px">
+        <button id="yojiHintToggle" class="btn btn-ghost">ヒントを表示</button>
+        <button id="yojiGiveUp" class="btn btn-ghost">諦める</button>
+        <button id="yojiCheck" class="btn btn-primary">確認</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Modal for Yoji result -->
+  <dialog id="yojiResultDialog">
+    <h2>正解！</h2>
+    <div class="challenge">
+      <p id="yojiResultHint"></p>
+      <p id="yojiResultExample" class="tiny"></p>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:16px">
+      <button id="yojiResultOk" class="btn btn-primary">閉じる</button>
+    </div>
+  </dialog>
+
+  <!-- Modal for Yoji edit -->
+  <dialog id="yojiEditDialog">
+    <h2>四字熟語問題編集</h2>
+    <div class="challenge">
+      <form>
+        <label for="newYoji">新しい問題（4文字）</label>
+        <input id="newYoji" placeholder="例: 一石二鳥" />
+        <label for="newYojiHint">ヒント（任意）</label>
+        <textarea id="newYojiHint" placeholder="例: 一つの行動で二つの利益を得る"></textarea>
+        <div style="display:flex;justify-content:flex-end;margin-top:12px">
+          <button id="addYoji" class="btn btn-primary">追加</button>
+        </div>
+      </form>
+      <div style="margin-top:20px">
+        <h3>カスタム問題一覧</h3>
+        <div id="yojiCustomList"></div>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:20px">
+      <button id="closeYojiEdit" class="btn btn-ghost">閉じる</button>
+    </div>
+  </dialog>
+
+  <!-- Modal for Attack result -->
+  <dialog id="attackResultDialog">
+    <h2>タイムアタック結果</h2>
+    <div style="font-size: 24px; text-align: center; margin: 16px 0;">
+      <span id="resultScore"></span>問正解
+    </div>
+    <div style="font-size: 14px; text-align: center; color: var(--muted);">
+      <span id="resultBest"></span>
+    </div>
+    <div style="display:flex;justify-content:flex-end;margin-top:20px">
+      <button id="closeResultDialog" class="btn btn-primary">閉じる</button>
+    </div>
+  </dialog>
+
+
+  <script>
+    // ===== Utility =====
+    const $ = (s)=>document.querySelector(s);
+    const pad = (n)=>String(n).padStart(2,'0');
+    const nowLocalISO = ()=>{ const d=new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+
+    // ===== State =====
+    let alarms = JSON.parse(localStorage.getItem('alarms_v3')||'[]'); // {id, time:HH:MM:SS, enabled:true, label:'', challenge:'sound'|'math'|'yoji'|'math-30'|'yoji-30'|'none', weekdays:[0..6]}
+    let alarmTimeout = null;
+    let audioCtx = null;
+    let gainNode = null;
+    let currentNodes = [];
+    let isRinging = false;
+    let wakeLock = null;
+    let editingAlarmId = null;
+
+    // Scores
+    const yojiBestKey = 'yoji_best_v1';
+    const mathBestKey = 'math_best_v1';
+    let yojiBest = Number(localStorage.getItem(yojiBestKey) || 0);
+    let mathBest = Number(localStorage.getItem(mathBestKey) || 0);
+    let yojiCurrent = 0, mathCurrent = 0;
+    function updateScoreboard(){
+        // HTMLからスコアボードを削除したため、この関数は空になります。
+    }
+    updateScoreboard();
+
+    // Register service worker for PWA + notification via SW
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.register('/sw.js').then(reg=>{
+        console.log('SW registered', reg.scope);
+      }).catch(err=>{
+        console.warn('SW register failed:', err);
+      });
+    }
+
+    // ===== Clock =====
+    function tick(){ $('#clock').textContent = nowLocalISO(); }
+    setInterval(tick,1000); tick();
+
+    // ===== Yoji data (built-in + custom) =====
+    const defaultYoji = [
+      {word:'起死回生', hint:'絶望的な状況から立ち直り、盛り返すこと。', example:'ピンチを乗り越して起死回生を果たした。'},
+      {word:'臨機応変', hint:'状況に応じて柔軟に対応すること。', example:'臨機応変に対応して問題を解決した。'},
+      {word:'以心伝心', hint:'言葉に頼らず心が通じること。', example:'二人は以心伝心で意思が通じていた。'},
+      {word:'一石二鳥', hint:'一つの行為で二つの利益を得ること。', example:'掃除しながら運動にもなり、一石二鳥だ。'},
+      {word:'心機一転', hint:'気持ちや状況を新たにすること。', example:'引っ越しをして心機一転、勉強に専念する。'},
+      {word:'四面楚歌', hint:'周囲が敵ばかりで孤立している状況。', example:'チームは不運で四面楚歌の状況に陥った。'},
+      {word:'勇往邁進', hint:'恐れずに前へ進むこと。', example:'目標に向かって勇往邁進する。'},
+      {word:'百花繚乱', hint:'多くの優れたものが一斉に現れる様子。', example:'新しい才能が百花繚乱の時代だ.'}
+    ];
+    let yojiCustom = JSON.parse(localStorage.getItem('yojiCustom')||'[]');
+    function saveYojiCustom(){ localStorage.setItem('yojiCustom', JSON.stringify(yojiCustom)); }
+
+    // ===== Storage Load/Save for alarms =====
+    function saveAlarms(){ localStorage.setItem('alarms_v3', JSON.stringify(alarms)); }
+
+    // ===== Audio =====
+    function ensureAudio(){ if(!audioCtx){ audioCtx = new (window.AudioContext || window.AudioContext)(); } if(!gainNode){ gainNode = audioCtx.createGain(); gainNode.gain.value = 0.001; gainNode.connect(audioCtx.destination); } }
+    function stopSound(){ currentNodes.forEach(n=>{ try{ if(typeof n.stop==='function') n.stop(); }catch(_){}; try{ if(n.disconnect) n.disconnect(); }catch(_){}; }); currentNodes=[]; if(gainNode && audioCtx) try{ gainNode.gain.cancelScheduledValues(audioCtx.currentTime);}catch(e){} }
+    
+    function playPattern(type){ ensureAudio(); stopSound(); const baseVol = Number($('#volume').value || 0.8); const fadeDur = Number($('#fadeInSel').value||0); const start = audioCtx.currentTime; gainNode.gain.setValueAtTime(0.001, start); const endVal = Math.max(0.001, baseVol); if(fadeDur>0) gainNode.gain.exponentialRampToValueAtTime(endVal, start + Math.max(0.01, fadeDur)); else gainNode.gain.setValueAtTime(endVal, start + 0.01);
+      const makeOsc = (w,f)=>{const o=audioCtx.createOscillator(); o.type=w; o.frequency.value=f; o.connect(gainNode); o.start(); currentNodes.push(o); return o; };
+      if(type==='beep' || type==='sound'){ const o=makeOsc('square',880); let high=true; const iv=setInterval(()=>{ if(!audioCtx) return; try{o.frequency.setValueAtTime(high?1200:660,audioCtx.currentTime);}catch(e){} high=!high; },120); currentNodes.push({stop:()=>clearInterval(iv)}); }
+      else if(type==='pulse'){ const o=makeOsc('sawtooth',90); const trem=audioCtx.createOscillator(); trem.frequency.value=2.2; const tremGain=audioCtx.createGain(); tremGain.gain.value=0.6; trem.connect(tremGain.gain); trem.start(); const srcGain=audioCtx.createGain(); srcGain.gain.value=0.4; o.disconnect(); o.connect(srcGain); srcGain.connect(gainNode); tremGain.connect(srcGain); currentNodes.push(trem,tremGain,srcGain); }
+      else { const o=makeOsc('triangle',400); const sweep=setInterval(()=>{ const t=audioCtx.currentTime; try{ o.frequency.cancelScheduledValues(t); o.frequency.setValueAtTime(400,t); o.frequency.exponentialRampToValueAtTime(1600,t+1.2); }catch(e){} },1300); currentNodes.push({stop:()=>clearInterval(sweep)}); }
+      return ()=>{ stopSound(); };
+    }
+
+    async function testPlay(){ const type = $('#soundType').value; ensureAudio(); try{ await audioCtx.resume(); }catch(e){} playPattern(type); isRinging = true; if('serviceWorker' in navigator && 'showNotification' in ServiceWorkerRegistration.prototype){ navigator.serviceWorker.ready.then(reg=>{ reg.showNotification('テスト再生', { body: 'サウンドのテスト再生です。', tag:'test-sound' }); }); } setTimeout(()=>{ ringStop(); },2500); }
+
+    // ===== Alarm Core (multiple + weekdays + per-alarm challenge) =====
+    function parseHMSToDateOn(date, hms){ const [H,M,S] = hms.split(':').map(Number); const d = new Date(date); d.setHours(H,M,S||0,0); return d; }
+    function nextOccurrenceForAlarm(alarm, fromDate=new Date()){ for(let i=0;i<14;i++){ const d = new Date(fromDate); d.setDate(d.getDate()+i); const wd = d.getDay(); if(alarm.weekdays && alarm.weekdays.length>0 && !alarm.weekdays.includes(wd)) continue; const candidate = parseHMSToDateOn(d, alarm.time); if(candidate > new Date()) return candidate; } return null; }
+    function getNextEnabledAlarm(){ let next=null; alarms.forEach(al=>{ if(!al.enabled) return; const occ = nextOccurrenceForAlarm(al); if(!occ) return; if(!next || occ < next.date) next = {alarm:al, date:occ}; }); return next; }
+    function formatDateForLabel(d){ return d.toLocaleString(undefined,{weekday:'short', hour:'2-digit', minute:'2-digit'}); }
+
+    function scheduleNext(){ if(alarmTimeout) clearTimeout(alarmTimeout); const next = getNextEnabledAlarm(); if(!next){ $('#nextAlarm').textContent = '次のアラーム: 未設定'; return; } const ms = next.date - new Date(); alarmTimeout = setTimeout(()=>{ triggerAlarm(next.alarm); }, Math.max(0, ms)); $('#nextAlarm').textContent = `次のアラーム: ${formatDateForLabel(next.date)}`; }
+
+    function triggerAlarm(alarm){ isRinging = true; ensureAudio(); try{ audioCtx.resume(); }catch(e){} playPattern($('#soundType').value==='beep'? 'beep' : $('#soundType').value);
+      const notifBody = `${alarm.label? alarm.label + ' — ':''}${alarm.time} になりました`;
+      if('serviceWorker' in navigator && 'showNotification' in ServiceWorkerRegistration.prototype){ navigator.serviceWorker.ready.then(reg=>{ reg.showNotification('アラーム', { body: notifBody, tag: `alarm-${alarm.id}`, renotify:true }); }); } else if('Notification' in window && Notification.permission==='granted'){ const n = new Notification('アラーム',{body:notifBody, silent:false}); setTimeout(()=>n.close(),15000); }
+      const chal = alarm.challenge || 'sound';
+      if(chal==='yoji'){ openYojiChallenge(); }
+      else if(chal==='math'){ openChallenge(); }
+      else if(chal==='yoji-30'){ openYojiTimeAttack(); }
+      else if(chal==='math-30'){ openMathTimeAttack(); }
+      else { /* sound only */ }
+    }
+
+    function ringStop(){ if(!isRinging) return; isRinging=false; stopSound(); scheduleNext(); }
+
+    // ===== Math Challenge =====
+    let currentAnswer = null;
+    const challengeDialog = $('#challengeDialog');
+    function makeProblem(){ const a=Math.floor(6+Math.random()*14); const b=Math.floor(6+Math.random()*14); const ops=['+','×','-']; const op=ops[Math.floor(Math.random()*ops.length)]; let ans=0; if(op==='+') ans=a+b; else if(op==='-') ans=a-b; else ans=a*b; return {text:`${a} ${op} ${b} = ?`, ans}; }
+    function openChallenge(){ const p = makeProblem(); currentAnswer = p.ans; $('#challengeText').textContent = p.text; $('#challengeInput').value = ''; challengeDialog.showModal(); $('#challengeInput').focus(); }
+    $('#challengeOk').addEventListener('click',(e)=>{ e.preventDefault(); const v = Number($('#challengeInput').value.trim()); if(v === currentAnswer){ challengeDialog.close(); ringStop(); scheduleNext(); } else { $('#challengeInput').value=''; $('#challengeInput').placeholder='違います…'; } });
+    $('#challengeCancel').addEventListener('click',()=>{ challengeDialog.close(); ringStop(); scheduleNext(); });
+
+    // ===== 四字熟語 (classic) =====
+    function shuffleArrayFY(a){ const arr = a.slice(); for(let i=arr.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]]; } return arr; }
+    function getYojiPool(){ return defaultYoji.concat(yojiCustom); }
+    let yojiAnswer = '';
+    let currentYojiHint = '';
+    let currentYojiExample = '';
+    let tapped = null;
+    function openYojiChallenge(){ const pool = getYojiPool(); if(pool.length===0) return alert('問題がありません。問題編集で追加してください。'); const item = pool[Math.floor(Math.random()*pool.length)]; yojiAnswer = item.word; currentYojiHint = item.hint || ''; currentYojiExample = item.example || ''; const chars = yojiAnswer.split(''); const shuffled = shuffleArrayFY(chars); const container = $('#yojiTiles'); container.innerHTML = ''; shuffled.forEach((ch, i)=>{ const el = document.createElement('div'); el.className='tile'; el.draggable = true; el.textContent = ch; el.dataset.index = i; el.addEventListener('dragstart',(ev)=>{ el.classList.add('dragging'); ev.dataTransfer.setData('text/plain', el.dataset.index); }); el.addEventListener('dragend',()=>{ el.classList.remove('dragging'); }); el.addEventListener('dragover',(ev)=>{ ev.preventDefault(); }); el.addEventListener('drop',(ev)=>{ ev.preventDefault(); const fromIndex = Number(ev.dataTransfer.getData('text/plain')); const toIndex = Array.from(container.children).indexOf(el); reorderTiles(fromIndex, toIndex); updateDataIndex(); }); el.addEventListener('click', ()=>{ handleTileTap(el); }); container.appendChild(el); }); updateDataIndex(); $('#yojiHint').style.display='none'; $('#yojiHint').textContent=''; $('#yojiHintToggle').textContent='ヒントを表示'; $('#yojiDialog').showModal(); }
+    function updateDataIndex(){ const container = $('#yojiTiles'); Array.from(container.children).forEach((el, idx)=>{
+      el.dataset.index = idx; }); }
+    function reorderTiles(from, to){ const container = $('#yojiTiles'); const tiles = Array.from(container.children); const [removed] = tiles.splice(from, 1); tiles.splice(to, 0, removed); container.innerHTML = ''; tiles.forEach(el=>container.appendChild(el)); }
+    function handleTileTap(el){ const container = $('#yojiTiles'); const tiles = Array.from(container.children); if(!tapped){ tapped = el; tapped.classList.add('selected'); } else if(tapped === el){ tapped.classList.remove('selected'); tapped = null; } else{ const fromIndex = tiles.indexOf(tapped); const toIndex = tiles.indexOf(el); reorderTiles(fromIndex,toIndex); updateDataIndex(); tapped.classList.remove('selected'); tapped = null; } }
+    $('#yojiCheck').addEventListener('click', ()=>{ const container = $('#yojiTiles'); const currentWord = Array.from(container.children).map(el=>el.textContent).join(''); if(currentWord === yojiAnswer){ $('#yojiDialog').close(); ringStop(); const resultDialog = $('#yojiResultDialog'); $('#yojiResultHint').textContent = `正解: ${yojiAnswer} - ${currentYojiHint}`; $('#yojiResultExample').textContent = currentYojiExample ? `（例）${currentYojiExample}` : ''; resultDialog.showModal(); } else { // animate wrong answer
+      container.style.animation = 'shake 0.5s'; setTimeout(()=>container.style.animation='', 500); } });
+    $('#yojiGiveUp').addEventListener('click',()=>{ $('#yojiDialog').close(); ringStop(); });
+    $('#yojiHintToggle').addEventListener('click',()=>{ const hint = $('#yojiHint'); hint.style.display = hint.style.display==='none' ? 'block' : 'none'; hint.textContent = currentYojiHint; $('#yojiHintToggle').textContent=hint.style.display==='none' ? 'ヒントを表示' : 'ヒントを隠す'; });
+    $('#yojiResultOk').addEventListener('click',()=>{ $('#yojiResultDialog').close(); });
+
+    // ===== Time Attack =====
+    let attackInterval = null;
+    let attackTime = 30;
+    let attackScore = 0;
+    let currentProblemType = null; // 'math' or 'yoji'
+
+    function startAttackCountdown(){
+      $('#overlay').style.display = 'flex';
+      $('#overlayCountdown').style.display = 'block';
+      $('#attackArea').style.display = 'none';
+      let count = 3;
+      $('#overlayCountdown').textContent = count;
+      const iv = setInterval(()=>{
+        count--;
+        $('#overlayCountdown').textContent = count;
+        if(count === 0){
+          clearInterval(iv);
+          $('#overlayCountdown').style.display = 'none';
+          $('#attackArea').style.display = 'block';
+          startAttackTimer();
+          generateAttackProblem();
+        }
+      },1000);
+    }
+    
+    function startAttackTimer(){
+      attackTime = 30;
+      attackScore = 0;
+      updateAttackTimerDisplay();
+      attackInterval = setInterval(()=>{
+        attackTime--;
+        updateAttackTimerDisplay();
+        if(attackTime <= 0){
+          clearInterval(attackInterval);
+          endAttack();
+        }
+      },1000);
+    }
+
+    function updateAttackTimerDisplay(){
+      $('#attackTimer').textContent = `残り: ${attackTime}s`;
+    }
+
+    function endAttack(){
+      $('#overlay').style.display = 'none';
+      ringStop();
+      const resultDialog = $('#attackResultDialog');
+      $('#resultScore').textContent = attackScore;
+
+      const bestKey = currentProblemType === 'math' ? mathBestKey : yojiBestKey;
+      let currentBest = Number(localStorage.getItem(bestKey) || 0);
+      if(attackScore > currentBest){
+        currentBest = attackScore;
+        localStorage.setItem(bestKey, currentBest);
+        $('#resultBest').textContent = `🎉自己ベストを更新！`;
+      } else {
+        $('#resultBest').textContent = `自己ベスト: ${currentBest}問`;
+      }
+      resultDialog.showModal();
+    }
+
+    $('#closeResultDialog').addEventListener('click',()=>{
+      $('#attackResultDialog').close();
+    });
+
+    function generateAttackProblem(){
+      if(currentProblemType === 'math'){
+        const p = makeProblem();
+        currentAnswer = p.ans;
+        $('#attackInfo').textContent = `${attackScore+1}問目`;
+        $('#attackQuestion').textContent = p.text;
+        $('#attackInput').value = '';
+        $('#attackInput').focus();
+      } else { // yoji
+        const pool = getYojiPool();
+        if(pool.length===0){ alert('問題がありません。問題編集で追加してください。'); return; }
+        const item = pool[Math.floor(Math.random()*pool.length)];
+        yojiAnswer = item.word;
+        const chars = yojiAnswer.split('');
+        const shuffled = shuffleArrayFY(chars);
+        const questionHtml = shuffled.map(ch=>`<div class="tile">${ch}</div>`).join('');
+        $('#attackInfo').textContent = `${attackScore+1}問目`;
+        $('#attackQuestion').innerHTML = questionHtml;
+        $('#attackInput').value = '';
+        $('#attackInput').focus();
+      }
+    }
+
+    $('#attackSubmit').addEventListener('click',()=>{
+      if(currentProblemType === 'math'){
+        const v = Number($('#attackInput').value.trim());
+        if(v === currentAnswer){
+          attackScore++;
+          generateAttackProblem();
+        } else {
+          // wrong answer, penalize time? or just clear?
+          $('#attackInput').value = '';
+          $('#attackInput').placeholder = '違います…';
+        }
+      } else { // yoji
+        const v = $('#attackInput').value.trim();
+        if(v === yojiAnswer){
+          attackScore++;
+          generateAttackProblem();
+        } else {
+          $('#attackInput').value = '';
+          $('#attackInput').placeholder = '違います…';
+        }
+      }
+    });
+
+    $('#attackGiveUp').addEventListener('click',()=>{
+      clearInterval(attackInterval);
+      endAttack();
+    });
+
+    function openMathTimeAttack(){
+      currentProblemType = 'math';
+      startAttackCountdown();
+    }
+
+    function openYojiTimeAttack(){
+      currentProblemType = 'yoji';
+      startAttackCountdown();
+    }
+
+    // ===== Alarm List & Edit =====
+    function renderAlarms(){
+      const alarmsList = $('#alarmsList');
+      if(alarms.length===0){
+        alarmsList.innerHTML = `<p class="hint" style="text-align:center;">アラームはまだありません</p>`;
+        return;
+      }
+      alarmsList.innerHTML = '';
+      alarms.sort((a,b)=>{
+        const [aH,aM] = a.time.split(':').map(Number);
+        const [bH,bM] = b.time.split(':').map(Number);
+        if(aH!==bH) return aH-bH;
+        return aM-bM;
+      });
+      alarms.forEach(alarm=>{
+        const el = document.createElement('div');
+        el.className = 'alarm-row';
+        el.innerHTML = `
+          <input type="checkbox" data-id="${alarm.id}" class="toggle-alarm" ${alarm.enabled?'checked':''}>
+          <div style="flex:1">
+            <div class="alarm-time">${alarm.time}</div>
+            <div class="muted">${alarm.label || '無題'}</div>
+            <div class="muted tiny">${alarm.weekdays && alarm.weekdays.length>0 ? alarm.weekdays.map(d=>['日','月','火','水','木','金','土'][d]).join(', ') : '毎日'}</div>
+          </div>
+          <div>
+            <button class="btn btn-ghost edit-alarm" data-id="${alarm.id}">編集</button>
+            <button class="btn btn-danger delete-alarm" data-id="${alarm.id}">削除</button>
+          </div>
+        `;
+        alarmsList.appendChild(el);
+      });
+      scheduleNext();
+    }
+
+    $('#addAlarmBtn').addEventListener('click',()=>{
+      const time = $('#appointment').value;
+      const label = $('#newLabel').value;
+      const challenge = $('#newChallenge').value;
+      if(!time){ alert('時刻を入力してください'); return; }
+      const newAlarm = {
+        id: Date.now(),
+        time: time,
+        label: label,
+        enabled: true,
+        challenge: challenge,
+        weekdays: [] // Default to all days
+      };
+      alarms.push(newAlarm);
+      saveAlarms();
+      renderAlarms();
+      $('#appointment').value = '';
+      $('#newLabel').value = '';
+    });
+    
+    document.addEventListener('change',(e)=>{
+      if(e.target.classList.contains('toggle-alarm')){
+        const id = Number(e.target.dataset.id);
+        const alarm = alarms.find(a=>a.id===id);
+        if(alarm){ alarm.enabled = e.target.checked; saveAlarms(); scheduleNext(); }
+      }
+    });
+
+    document.addEventListener('click',(e)=>{
+      if(e.target.classList.contains('delete-alarm')){
+        const id = Number(e.target.dataset.id);
+        if(confirm('このアラームを削除しますか？')){
+          alarms = alarms.filter(a=>a.id!==id);
+          saveAlarms();
+          renderAlarms();
+        }
+      }
+      if(e.target.classList.contains('edit-alarm')){
+        editingAlarmId = Number(e.target.dataset.id);
+        const alarm = alarms.find(a=>a.id===editingAlarmId);
+        if(!alarm) return;
+        $('#editTime').value = alarm.time;
+        $('#editLabel').value = alarm.label;
+        $('#editChallenge').value = alarm.challenge;
+        // weekdays
+        Array.from($('#editWeekdays').children).forEach(el=>{
+          const day = Number(el.dataset.day);
+          if(alarm.weekdays.includes(day)){
+            el.classList.add('selected');
+          } else {
+            el.classList.remove('selected');
+          }
+        });
+        $('#alarmEditDialog').showModal();
+      }
+    });
+
+    $('#saveAlarmEdit').addEventListener('click',()=>{
+      const alarm = alarms.find(a=>a.id===editingAlarmId);
+      if(!alarm) return;
+      const newTime = $('#editTime').value;
+      if(!newTime){ alert('時刻を入力してください'); return; }
+      alarm.time = newTime;
+      alarm.label = $('#editLabel').value;
+      alarm.challenge = $('#editChallenge').value;
+      alarm.weekdays = Array.from($('#editWeekdays').children).filter(el=>el.classList.contains('selected')).map(el=>Number(el.dataset.day));
+      saveAlarms();
+      renderAlarms();
+      $('#alarmEditDialog').close();
+    });
+
+    $('#cancelAlarmEdit').addEventListener('click',()=>{
+      $('#alarmEditDialog').close();
+    });
+
+    $('#editWeekdays').addEventListener('click',(e)=>{
+      if(e.target.classList.contains('wd-btn')){
+        e.target.classList.toggle('selected');
+      }
+    });
+
+    // ===== Wake Lock API =====
+    async function requestWakeLock(){
+      if('wakeLock' in navigator){
+        try{
+          wakeLock = await navigator.wakeLock.request('screen');
+          $('#wakeLockStatus').textContent = '⚡ 画面スリープ抑止: 取得済み';
+          wakeLock.addEventListener('release',()=>{
+            $('#wakeLockStatus').textContent = '⚡ 画面スリープ抑止: 解除されました';
+          });
+        }catch(err){
+          $('#wakeLockStatus').textContent = '⚡ 画面スリープ抑止: 拒否されました';
+          console.error(`${err.name}, ${err.message}`);
+        }
+      } else {
+        $('#wakeLockStatus').textContent = '⚡ 画面スリープ抑止: 非対応';
+      }
+    }
+    $('#toggleWakeLock').addEventListener('click', ()=>{
+      if(wakeLock){
+        wakeLock.release();
+        wakeLock = null;
+      } else {
+        requestWakeLock();
+      }
+    });
+
+    // ===== Permissions check =====
+    async function checkNotificationPermission(){
+      const perm = Notification.permission;
+      $('#permissionsBadge').textContent = `権限: ${perm==='granted'?'許可':'未許可'}`;
+    }
+    $('#reqPerm').addEventListener('click',()=>{
+      Notification.requestPermission().then(perm=>{
+        checkNotificationPermission();
+      });
+    });
+
+    // ===== Yoji Edit Modal =====
+    const yojiEditDialog = $('#yojiEditDialog');
+    function renderYojiCustom(){
+      const list = $('#yojiCustomList');
+      if(yojiCustom.length===0){
+        list.innerHTML = `<p class="hint" style="text-align:center;">カスタム問題はまだありません</p>`;
+        return;
+      }
+      list.innerHTML = '';
+      yojiCustom.forEach((item,i)=>{
+        const el = document.createElement('div');
+        el.className = 'list-row';
+        el.innerHTML = `
+          <div>
+            <div>${item.word}</div>
+            <div class="tiny muted">${item.hint||''}</div>
+          </div>
+          <div>
+            <button class="btn btn-danger delete-yoji" data-index="${i}">削除</button>
+          </div>
+        `;
+        list.appendChild(el);
+      });
+    }
+    $('#editYoji').addEventListener('click',()=>{
+      renderYojiCustom();
+      yojiEditDialog.showModal();
+    });
+    $('#addYoji').addEventListener('click',(e)=>{
+      e.preventDefault();
+      const word = $('#newYoji').value.trim();
+      if(word.length !== 4){ alert('四字熟語は4文字で入力してください。'); return; }
+      yojiCustom.push({word, hint:$('#newYojiHint').value.trim()});
+      saveYojiCustom();
+      renderYojiCustom();
+      $('#newYoji').value = '';
+      $('#newYojiHint').value = '';
+    });
+    $('#yojiCustomList').addEventListener('click',(e)=>{
+      if(e.target.classList.contains('delete-yoji')){
+        const index = Number(e.target.dataset.index);
+        if(confirm('この問題を削除しますか？')){
+          yojiCustom.splice(index,1);
+          saveYojiCustom();
+          renderYojiCustom();
+        }
+      }
+    });
+    $('#closeYojiEdit').addEventListener('click',()=>{
+      yojiEditDialog.close();
+    });
+
+    // Initial load
+    window.addEventListener('load',()=>{
+      renderAlarms();
+      checkNotificationPermission();
+    });
+
+    // Event listeners
+    $('#testSound').addEventListener('click', testPlay);
+  </script>
+</body>
+</html>
